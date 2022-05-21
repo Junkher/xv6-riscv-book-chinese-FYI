@@ -28,8 +28,11 @@ PA由索引到的PTE中44位的PPN和源VA的低12位组成。
 
 ![](../img/3/Pasted%20image%2020220516202844.png)
 
+
+
 而根据Fig3.2，实际上的转换有三个步骤。
 ![](../img/3/Pasted%20image%2020220516211620.png)
+
 页表以三级树的形式储存在PA中，树的根节点是一个包含512个PTE的页表，保存着下一级页表页（一个页刚好装下一个页表）的PA。而这些页表又包含512个PTE对应最后一级页表。分页硬件使用VA中高27位中的前9位来选择根页表(L2)中的PTE，中间9位选择下一级页表(L1)的PTE，最后9位选择最后一级页表(L0)中的PTE
 
 如果任何一个PTE转换的PA不存在，分页硬件就会抛出页异常(page-fault exception)，将其交给内核处理(见章节4)。**三级页表的结构允许页表丢弃完整的页表页因为大多数的VA是没有被映射的。
@@ -51,6 +54,9 @@ memory has an address, called a physical address.
 指令只会使用VA，通过分页硬件来转换为PA，再发送到DRAM来读写数据。
 >Unlike physical memory and virtual addresses, virtual memory isn’t a physical object, but refers to the collection of abstractions and mechanisms the kernel provides to manage physical memory and virtual addresses.
 跟物理内存和虚拟地址不同，虚拟内存并非是物理实体，而是内核管理物理内存和虚拟地址抽象集合
+
+
+---
 
 ### 3.2 Kernel addree space
 
@@ -82,6 +88,7 @@ which would then be hard to use. The kernel maps the pages for the trampoline an
 and PTE_X . The kernel reads and executes instructions from these pages. The kernel maps the other pages with the permissions PTE_R and PTE_W , so that it can read and write the memory in those
 pages. The mappings for the guard pages are invalid.
 
+---
 
 ### 3.3 Code: creating an address space
 
@@ -113,11 +120,15 @@ main调用procinit (kernel/proc.c:26)来为每个进程分配内核栈。它会�
 
 每个RISC-V CPU缓存PTE在TLB(Translation Look-aside Buffer)快表中，当xv6修改页表，它必须告诉CPU将TLB中的相应entries置为无效。如果不这样做，则at some point TCB肯会使用旧的缓存映射，指向一个已经被分配给另一个进程的物理页，结果会造成一个进程写数据到其他进程的内存中。RISC-V有一个指令叫sfence.vma用来刷新当前CPU的TLB。xv6在重载satp寄存器后通过kvminithart执行sfence.vma，在trampoline代码中在返回用户空间前切换到用户页表。
 
+---
+
 ### 3.4 Physical memory allocation
 
 内核必须在运行时为页表、用户内存、内核栈以及管道缓存分配和释放物理内存。
 
 xv6使用PHYSTOP和内核末尾之间的物理内存来进行运行时分配。每次分配或释放一个4096字节的页。并维持一个空闲页的链表。分配过程则包括从该链表中移出页，释放过程包括将空闲页加入该链表。
+
+---
 
 ### 3.5 Code: Physical memory allocator
 
@@ -150,6 +161,7 @@ allocator一开始没有内存，调用kfree将内存交由其管理。
 >Then kfree prepends the page to the free list: it casts pa to a pointer to struct run , records the old start of the free list in r->next , and sets the free list equal to r . kalloc removes and returns the first element in the free list.
 然后kfree将会将该页面添加到空闲链表中，将pa强制转换为指向struct run的指针，在r->next记录free list的旧开始，然后将空闲页链表等同于r.kalloc移除和返回free list的第一个元素
 
+---
 
 ### 3.6 Process address space
 
@@ -172,8 +184,9 @@ stack是单页，写入了exec创建的初始内容。包含命令行参数以�
 
 为了检测用户栈溢出了目前已分配的栈内存，xv6在栈的正下方放置了一个无效的保护页。如果用户的栈溢出然后进程尝试使用栈下方的地址，硬件就会产生一个页错误异常，因为这个映射是无效的。一个现代的操作系统可能会在栈溢出时自动为栈扩容。
 
+---
 
-### Code: sbrk
+### 3.7 Code: sbrk
 
 Sbrk是进程收缩或扩充内存的系统调用。该系统调用通过函数`growproc` (kernel/proc.c:239)来实现。`growproc`调用`uvmalloc`或者`uvmdealloc`，取决于n是正数还是负数。
 `uvmalloc` (kernel/vm.c:229) 调用`kalloc`来分配物理内存，并且通过`mappages`将PTEs添加到用户页表。
@@ -181,7 +194,9 @@ Sbrk是进程收缩或扩充内存的系统调用。该系统调用通过函数`
 
 xv6中进程页表不仅仅是告知硬件怎么映射用户的虚拟地址，也是物理内存页被分配给进程的唯一记录。这就是当释放用户内存(在`uvmunmap`中)需要检查用户的页表。
 
-### Code: exec
+---
+
+### 3.8 Code: exec
 
 Exec是创建用户部分地址空间的系统调用。它会从储存在文件系统中的一个文件初始化用户地址空间。`Exec` (kernel/exec.c:13)使用`namei`(kernel/exec.c:26)打开以path命名的二进制文件，这将会在章节8介绍。然后，它会读取ELF头。xv6使用广泛应用的ELF格式(kernel/elf.h:25)来描述应用。一个ELF二进制文件包含一个ELF头，`struct elfhdr`(kernel/elf.h:6)，跟着一连串的程序节头`struct proghdr`(kernel/elf.h:25)。每个`proghdr`表示必须被加载进内存的程序节；xv6程序只有一个程序节头，但其他的系统可能有不同的指令节和数据节。
 
@@ -215,8 +230,9 @@ program header的`filesz`可能会比`memsz`小，这意味着需要填充0(C的
 
 `Exec`从ELF文件中读取数据到其指定的内存地址。用户或者进程可以将任意地址写到ELF文件中。因此`exec`是有风险的，因为ELF文件中的地址可能无意或有意地指向内核。
 
+---
 
-### Real world
+### 3.9 Real world
 
 像大多数的操作系统一样，xv6使用分页硬件来做内存保护和映射。大多数的操作系统会比xv6更加精巧地利用分页，将分页和分页错误异常结合，这个我们将在章节4讨论。
 
