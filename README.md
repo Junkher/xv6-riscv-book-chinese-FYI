@@ -8,7 +8,7 @@
 
 - [ ] Chapter 1 操作系统接口
 - [ ] Chapter 2 操作系统架构
-- [x] Chapter 3 页表
+- [x] Chapter 3 [页表](Chapter%203%20Page%20tables/Chapter%203%20Page%20tables.md)
 - [ ] Chapter 4 陷入和系统调用
 - [ ] Chapter 5 中断和设备驱动
 - [ ] Chapter 6 锁
